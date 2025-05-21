@@ -1,10 +1,15 @@
 "use client"
 
-import type React from "react"
+import type React from 'react';
+import {
+  useEffect,
+  useState,
+} from 'react';
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import {
+  AnimatePresence,
+  motion,
+} from 'framer-motion';
 import {
   AlertTriangle,
   BarChart3,
@@ -17,14 +22,17 @@ import {
   Search,
   Settings,
   Shield,
-} from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
+} from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { useToast } from "@/hooks/use-toast"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ThemeToggle } from '@/components/theme-toggle';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,8 +40,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { ThemeToggle } from "@/components/theme-toggle"
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import { useToast } from '@/hooks/use-toast';
 
 interface NavItem {
   title: string

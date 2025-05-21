@@ -1,6 +1,7 @@
-import type { Metadata } from "next"
-import { DashboardShell } from "@/components/dashboard-shell"
-import { ReportsContent } from "@/components/reports-content"
+import type { Metadata } from 'next';
+
+import { DashboardShell } from '@/components/dashboard-shell';
+import { ReportsContent } from '@/components/reports-content';
 
 export const metadata: Metadata = {
   title: "Reports - AML Shield",
