@@ -15,4 +15,3 @@ export default function ReportsPage() {
     </DashboardShell>
   )
 }
-

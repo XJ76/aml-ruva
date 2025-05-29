@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowUpDown, Eye, MoreHorizontal, Shield, XCircle } from "lucide-react"
+import { ArrowUpDown, Eye, MoreHorizontal, Shield, XCircle, CheckCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -16,153 +16,22 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-
-interface Transaction {
-  id: string
-  date: string
-  amount: number
-  sender: string
-  recipient: string
-  riskScore: number
-  status: "Pending" | "Cleared" | "Flagged" | "Blocked"
-}
-
-const initialTransactions: Transaction[] = [
-  {
-    id: "TX-7829",
-    date: "2023-03-28",
-    amount: 24950,
-    sender: "Global Trading Ltd.",
-    recipient: "Acme Corp",
-    riskScore: 87,
-    status: "Flagged",
-  },
-  {
-    id: "TX-7828",
-    date: "2023-03-27",
-    amount: 5000,
-    sender: "John Smith",
-    recipient: "Jane Doe",
-    riskScore: 32,
-    status: "Cleared",
-  },
-  {
-    id: "TX-7827",
-    date: "2023-03-27",
-    amount: 18750,
-    sender: "Offshore Holdings",
-    recipient: "Local Business Inc.",
-    riskScore: 76,
-    status: "Pending",
-  },
-  {
-    id: "TX-7826",
-    date: "2023-03-26",
-    amount: 9999,
-    sender: "Anonymous Sender",
-    recipient: "Cash Services Ltd.",
-    riskScore: 92,
-    status: "Blocked",
-  },
-  {
-    id: "TX-7825",
-    date: "2023-03-26",
-    amount: 3500,
-    sender: "Regular Customer",
-    recipient: "Online Shop",
-    riskScore: 12,
-    status: "Cleared",
-  },
-  {
-    id: "TX-7824",
-    date: "2023-03-25",
-    amount: 12000,
-    sender: "Foreign Entity",
-    recipient: "Local Charity",
-    riskScore: 65,
-    status: "Flagged",
-  },
-  {
-    id: "TX-7823",
-    date: "2023-03-25",
-    amount: 7500,
-    sender: "Investment Fund",
-    recipient: "Private Account",
-    riskScore: 54,
-    status: "Pending",
-  },
-  {
-    id: "TX-7822",
-    date: "2023-03-24",
-    amount: 50000,
-    sender: "Unknown Source",
-    recipient: "Shell Company",
-    riskScore: 98,
-    status: "Blocked",
-  },
-  {
-    id: "TX-7821",
-    date: "2023-03-24",
-    amount: 2750,
-    sender: "Small Business",
-    recipient: "Supplier Inc.",
-    riskScore: 23,
-    status: "Cleared",
-  },
-  {
-    id: "TX-7820",
-    date: "2023-03-23",
-    amount: 15000,
-    sender: "High-Risk Country Corp",
-    recipient: "Local Bank",
-    riskScore: 82,
-    status: "Flagged",
-  },
-]
+import { useTransactionStore, type Transaction } from "@/lib/store/transaction-store"
 
 interface TransactionTableProps {
   limit?: number
+  transactions?: Transaction[]
 }
 
-export function TransactionTable({ limit }: TransactionTableProps) {
+export function TransactionTable({ limit, transactions: propTransactions }: TransactionTableProps) {
   const [sorting, setSorting] = useState<"asc" | "desc">("desc")
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const { toast } = useToast()
 
+  const { transactions: storeTransactions, updateTransactionStatus } = useTransactionStore()
+  const transactions = propTransactions || storeTransactions
+
   const displayedTransactions = limit ? transactions.slice(0, limit) : transactions
-
-  useEffect(() => {
-    // Simulate real-time updates
-    const interval = setInterval(() => {
-      if (Math.random() > 0.7) {
-        const newTransaction: Transaction = {
-          id: `TX-${7830 + Math.floor(Math.random() * 100)}`,
-          date: new Date().toISOString().split("T")[0],
-          amount: Math.floor(Math.random() * 50000) + 1000,
-          sender: ["Global Corp", "International Trading", "Finance Ltd.", "Investment Group"][
-            Math.floor(Math.random() * 4)
-          ],
-          recipient: ["Local Business", "Private Account", "Offshore Entity", "Merchant Services"][
-            Math.floor(Math.random() * 4)
-          ],
-          riskScore: Math.floor(Math.random() * 100),
-          status: ["Pending", "Cleared", "Flagged", "Blocked"][Math.floor(Math.random() * 4)] as Transaction["status"],
-        }
-
-        setTransactions((prev) => [newTransaction, ...prev.slice(0, prev.length - 1)])
-
-        if (newTransaction.riskScore > 80) {
-          toast({
-            title: "High-risk transaction detected",
-            description: `Transaction ${newTransaction.id} has been flagged for review`,
-          })
-        }
-      }
-    }, 10000)
-
-    return () => clearInterval(interval)
-  }, [toast])
 
   const getRiskBadge = (score: number) => {
     if (score >= 80) return <Badge variant="destructive">{score}</Badge>
@@ -228,7 +97,7 @@ export function TransactionTable({ limit }: TransactionTableProps) {
   }
 
   const handleUpdateStatus = (id: string, newStatus: Transaction["status"]) => {
-    setTransactions((prev) => prev.map((tx) => (tx.id === id ? { ...tx, status: newStatus } : tx)))
+    updateTransactionStatus(id, newStatus)
 
     toast({
       title: "Transaction status updated",
@@ -381,6 +250,13 @@ export function TransactionTable({ limit }: TransactionTableProps) {
                 </div>
               </div>
 
+              {selectedTransaction.description && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Description</p>
+                  <p className="text-sm">{selectedTransaction.description}</p>
+                </div>
+              )}
+
               <div className="rounded-md bg-muted p-3">
                 <h4 className="font-medium">ML Analysis</h4>
                 <p className="mt-1 text-sm">
@@ -425,24 +301,3 @@ export function TransactionTable({ limit }: TransactionTableProps) {
     </>
   )
 }
-
-function CheckCircle(props) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
-  )
-}
-

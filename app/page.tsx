@@ -11,4 +11,3 @@ export default function Page() {
   // For demo purposes, we'll redirect to the login page
   redirect("/login")
 }
-

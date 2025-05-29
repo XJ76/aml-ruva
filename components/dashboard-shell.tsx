@@ -1,15 +1,9 @@
 "use client"
 
-import type React from 'react';
-import {
-  useEffect,
-  useState,
-} from 'react';
+import type React from "react"
+import { useEffect, useState } from "react"
 
-import {
-  AnimatePresence,
-  motion,
-} from 'framer-motion';
+import { AnimatePresence, motion } from "framer-motion"
 import {
   AlertTriangle,
   BarChart3,
@@ -22,17 +16,15 @@ import {
   Search,
   Settings,
   Shield,
-} from 'lucide-react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+  User,
+  X,
+} from "lucide-react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 
-import { ThemeToggle } from '@/components/theme-toggle';
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { ThemeToggle } from "@/components/theme-toggle"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,19 +32,25 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from '@/components/ui/sheet';
-import { useToast } from '@/hooks/use-toast';
+} from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { useToast } from "@/hooks/use-toast"
+import { useTransactionStore } from "@/lib/store/transaction-store"
+import { useCaseStore } from "@/lib/store/case-store"
 
 interface NavItem {
   title: string
   href: string
   icon: React.ReactNode
+}
+
+interface SearchResult {
+  id: string
+  title: string
+  type: "transaction" | "case" | "user"
+  href: string
+  description?: string
 }
 
 const navItems: NavItem[] = [
@@ -82,8 +80,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [notifications, setNotifications] = useState(4)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [showSearchResults, setShowSearchResults] = useState(false)
   const pathname = usePathname()
   const { toast } = useToast()
+
+  const { transactions } = useTransactionStore()
+  const { cases } = useCaseStore()
 
   useEffect(() => {
     // Simulate loading data
@@ -94,12 +99,82 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer)
   }, [])
 
+  useEffect(() => {
+    if (searchQuery.length > 1) {
+      // Changed from 2 to 1 for faster search
+      setIsSearching(true)
+
+      // Reduced search delay for better UX
+      const searchTimer = setTimeout(() => {
+        const results: SearchResult[] = []
+
+        // Search transactions with better matching
+        transactions.forEach((tx) => {
+          const searchLower = searchQuery.toLowerCase()
+          if (
+            tx.id.toLowerCase().includes(searchLower) ||
+            tx.sender.toLowerCase().includes(searchLower) ||
+            tx.recipient.toLowerCase().includes(searchLower) ||
+            (tx.description && tx.description.toLowerCase().includes(searchLower)) ||
+            tx.amount.toString().includes(searchQuery) ||
+            tx.status.toLowerCase().includes(searchLower)
+          ) {
+            results.push({
+              id: tx.id,
+              title: `Transaction ${tx.id}`,
+              type: "transaction",
+              href: "/dashboard/transactions",
+              description: `$${tx.amount.toLocaleString()} from ${tx.sender} to ${tx.recipient} (${tx.status})`,
+            })
+          }
+        })
+
+        // Search cases with better matching
+        cases.forEach((c) => {
+          const searchLower = searchQuery.toLowerCase()
+          if (
+            c.id.toLowerCase().includes(searchLower) ||
+            c.title.toLowerCase().includes(searchLower) ||
+            c.description.toLowerCase().includes(searchLower) ||
+            c.riskLevel.toLowerCase().includes(searchLower) ||
+            c.status.toLowerCase().includes(searchLower)
+          ) {
+            results.push({
+              id: c.id,
+              title: `Case ${c.id}`,
+              type: "case",
+              href: "/dashboard/cases",
+              description: `${c.riskLevel} Risk - ${c.status} - ${c.title}`,
+            })
+          }
+        })
+
+        setSearchResults(results.slice(0, 8)) // Increased to 8 results
+        setIsSearching(false)
+        setShowSearchResults(true)
+      }, 200) // Reduced delay from 300ms to 200ms
+
+      return () => clearTimeout(searchTimer)
+    } else {
+      setSearchResults([])
+      setShowSearchResults(false)
+      setIsSearching(false)
+    }
+  }, [searchQuery, transactions, cases])
+
   const handleNotificationClick = () => {
     toast({
       title: "New alerts",
       description: "You have 4 new suspicious activity alerts to review",
     })
     setNotifications(0)
+  }
+
+  const handleSearchResultClick = (href: string) => {
+    setSearchQuery("")
+    setShowSearchResults(false)
+    // Navigate to the result
+    window.location.href = href
   }
 
   return (
@@ -160,14 +235,64 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
         <div className="ml-auto flex items-center gap-4">
-          <form className="relative hidden md:flex">
+          <div className="relative hidden md:flex">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search transactions..."
+              placeholder="Search transactions, cases..."
               className="w-64 rounded-lg bg-background pl-8 md:w-80"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
             />
-          </form>
+            {isSearching && (
+              <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+            )}
+
+            {/* Search Results Dropdown */}
+            <AnimatePresence>
+              {showSearchResults && searchResults.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute top-full mt-1 w-full rounded-md border bg-popover p-2 shadow-md"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground">Search Results</span>
+                    <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => setShowSearchResults(false)}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {searchResults.map((result) => (
+                    <Link
+                      key={result.id}
+                      href={result.href}
+                      onClick={() => handleSearchResultClick(result.href)}
+                      className="block rounded-sm p-2 hover:bg-accent"
+                    >
+                      <div className="flex items-center gap-2">
+                        {result.type === "transaction" ? (
+                          <BarChart3 className="h-4 w-4 text-blue-500" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 text-orange-500" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{result.title}</p>
+                          {result.description && (
+                            <p className="text-xs text-muted-foreground truncate">{result.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                  {searchResults.length === 0 && (
+                    <div className="p-2 text-center text-sm text-muted-foreground">No results found</div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <ThemeToggle />
           <Button variant="outline" size="icon" className="relative" onClick={handleNotificationClick}>
             <Bell className="h-4 w-4" />
@@ -243,24 +368,3 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     </div>
   )
 }
-
-function User(props) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  )
-}
-

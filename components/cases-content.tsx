@@ -1,103 +1,68 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { AlertTriangle, CheckCircle, Clock, Search, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle, Clock, Search, XCircle, Plus, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Textarea } from "@/components/ui/textarea"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { useCaseStore, type Case } from "@/lib/store/case-store"
 import { useToast } from "@/hooks/use-toast"
 
-interface Case {
-  id: string
-  date: string
-  title: string
-  description: string
-  riskLevel: "High" | "Medium" | "Low"
-  mlConfidence: number
-  status: "Open" | "In Review" | "Closed" | "Escalated"
-}
-
-const cases: Case[] = [
-  {
-    id: "AML-2023-089",
-    date: "2023-03-15",
-    title: "Multiple high-value transactions from multiple jurisdictions",
-    description: "Multiple high-value transactions from multiple jurisdictions within 24 hours.",
-    riskLevel: "High",
-    mlConfidence: 92,
-    status: "Open",
-  },
-  {
-    id: "AML-2023-087",
-    date: "2023-03-14",
-    title: "Unusual pattern of small deposits followed by large withdrawal",
-    description: "Unusual pattern of small deposits followed by large withdrawal.",
-    riskLevel: "Medium",
-    mlConfidence: 78,
-    status: "In Review",
-  },
-  {
-    id: "AML-2023-085",
-    date: "2023-03-12",
-    title: "Transaction with entity on watchlist",
-    description: "Transaction with entity on watchlist. Structured to avoid reporting threshold.",
-    riskLevel: "High",
-    mlConfidence: 95,
-    status: "Escalated",
-  },
-  {
-    id: "AML-2023-084",
-    date: "2023-03-11",
-    title: "Rapid succession of international wire transfers",
-    description: "Customer initiated 5 international wire transfers to different beneficiaries within 48 hours.",
-    riskLevel: "High",
-    mlConfidence: 89,
-    status: "Open",
-  },
-  {
-    id: "AML-2023-082",
-    date: "2023-03-10",
-    title: "Unusual cash deposits at multiple branches",
-    description: "Customer made cash deposits just under reporting threshold at 3 different branches on the same day.",
-    riskLevel: "Medium",
-    mlConfidence: 82,
-    status: "In Review",
-  },
-  {
-    id: "AML-2023-080",
-    date: "2023-03-08",
-    title: "Account activity inconsistent with customer profile",
-    description:
-      "Sudden increase in transaction volume and value inconsistent with historical activity and stated business purpose.",
-    riskLevel: "Medium",
-    mlConfidence: 76,
-    status: "Closed",
-  },
-]
+const caseSchema = z.object({
+  title: z.string().min(5, "Title must be at least 5 characters"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+  riskLevel: z.enum(["High", "Medium", "Low"]),
+  mlConfidence: z.number().min(0).max(100),
+  assignedTo: z.string().optional(),
+})
 
 export function CasesContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const [riskFilter, setRiskFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [selectedCase, setSelectedCase] = useState<Case | null>(null)
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const { cases, addCase, updateCaseStatus, syncWithTransactions, getFilteredCases } = useCaseStore()
   const { toast } = useToast()
 
-  const filteredCases = cases.filter((c) => {
-    const matchesSearch =
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.description.toLowerCase().includes(searchQuery.toLowerCase())
-
-    const matchesRisk = riskFilter === "all" || c.riskLevel.toLowerCase() === riskFilter.toLowerCase()
-    const matchesStatus =
-      statusFilter === "all" || c.status.toLowerCase().replace(" ", "-") === statusFilter.toLowerCase()
-
-    return matchesSearch && matchesRisk && matchesStatus
+  const form = useForm<z.infer<typeof caseSchema>>({
+    resolver: zodResolver(caseSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      riskLevel: "Medium",
+      mlConfidence: 50,
+      assignedTo: "",
+    },
   })
+
+  // Sync with transactions on component mount and periodically
+  useEffect(() => {
+    syncWithTransactions()
+    const interval = setInterval(syncWithTransactions, 30000) // Sync every 30 seconds
+    return () => clearInterval(interval)
+  }, [syncWithTransactions])
+
+  const filteredCases = getFilteredCases(searchQuery, riskFilter, statusFilter)
 
   const handleReviewCase = (caseItem: Case) => {
     setSelectedCase(caseItem)
@@ -109,12 +74,34 @@ export function CasesContent() {
 
   const handleUpdateStatus = (newStatus: Case["status"]) => {
     if (selectedCase) {
+      updateCaseStatus(selectedCase.id, newStatus)
       toast({
         title: "Case status updated",
         description: `Case ${selectedCase.id} has been marked as ${newStatus}`,
       })
       setSelectedCase(null)
     }
+  }
+
+  const onSubmit = async (values: z.infer<typeof caseSchema>) => {
+    setIsSubmitting(true)
+
+    // Simulate processing delay
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    addCase({
+      ...values,
+      status: "Open",
+    })
+
+    setIsSubmitting(false)
+    setIsAddDialogOpen(false)
+    form.reset()
+
+    toast({
+      title: "Case created successfully",
+      description: "The new case has been added to the system",
+    })
   }
 
   const getRiskBadge = (risk: Case["riskLevel"]) => {
@@ -180,6 +167,126 @@ export function CasesContent() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Case Management</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Case
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Create New Case</DialogTitle>
+              <DialogDescription>Manually create a new compliance case for investigation.</DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Case Title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Suspicious activity detected..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Detailed description of the suspicious activity..."
+                          className="min-h-[100px]"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="riskLevel"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Risk Level</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select risk level" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Low">Low</SelectItem>
+                            <SelectItem value="Medium">Medium</SelectItem>
+                            <SelectItem value="High">High</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mlConfidence"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confidence Score (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="85"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <FormField
+                  control={form.control}
+                  name="assignedTo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Assigned To (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Compliance Officer Name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Case"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card>
@@ -375,4 +482,3 @@ export function CasesContent() {
     </div>
   )
 }
-

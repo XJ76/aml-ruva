@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { AlertTriangle, BarChart3, Bell, FileText, Filter, RefreshCw, Shield } from "lucide-react"
 
@@ -9,19 +9,43 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { RiskScoreChart } from "@/components/risk-score-chart"
 import { AlertsOverview } from "@/components/alerts-overview"
-import { ComplianceMetrics } from "@/components/compliance-metrics"
 import { TransactionTable } from "@/components/transaction-table"
 import { useToast } from "@/hooks/use-toast"
+import { useUserStore } from "@/lib/store/user-store"
+import { useTransactionStore } from "@/lib/store/transaction-store"
+import { useCaseStore } from "@/lib/store/case-store"
+import Link from "next/link"
 
 export function DashboardContent() {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const { hasTransactions } = useUserStore()
+  const { transactions } = useTransactionStore()
+  const { cases } = useCaseStore()
+
   const [metrics, setMetrics] = useState({
-    totalAlerts: 142,
-    highRiskCases: 28,
-    falsePositives: 38,
-    mlAccuracy: 87.4,
+    totalAlerts: 0,
+    highRiskCases: 0,
+    falsePositives: 0,
+    mlAccuracy: 0,
   })
   const { toast } = useToast()
+
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const highRiskTransactions = transactions.filter((tx) => tx.riskScore >= 80)
+      const flaggedTransactions = transactions.filter((tx) => tx.status === "Flagged")
+      const clearedHighRisk = transactions.filter((tx) => tx.status === "Cleared" && tx.riskScore > 70)
+      const falsePositiveRate = transactions.length > 0 ? (clearedHighRisk.length / transactions.length) * 100 : 0
+      const avgRiskScore = transactions.reduce((sum, tx) => sum + tx.riskScore, 0) / transactions.length
+
+      setMetrics({
+        totalAlerts: flaggedTransactions.length + highRiskTransactions.length,
+        highRiskCases: cases.filter((c) => c.riskLevel === "High").length,
+        falsePositives: Math.round(falsePositiveRate),
+        mlAccuracy: Math.round(100 - falsePositiveRate),
+      })
+    }
+  }, [transactions, cases])
 
   const refreshData = () => {
     setIsRefreshing(true)
@@ -42,6 +66,41 @@ export function DashboardContent() {
         description: "Latest data has been loaded",
       })
     }, 1500)
+  }
+
+  if (!hasTransactions && transactions.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        </div>
+
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Shield className="h-16 w-16 text-muted-foreground mb-4" />
+            <h3 className="text-2xl font-semibold mb-2">Welcome to AML Shield</h3>
+            <p className="text-muted-foreground text-center mb-6 max-w-md">
+              Start monitoring transactions and managing AML compliance. Add your first transaction to see real-time
+              analytics and risk assessments.
+            </p>
+            <div className="flex gap-4">
+              <Button asChild>
+                <Link href="/dashboard/transactions">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Add First Transaction
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/reports">
+                  <FileText className="mr-2 h-4 w-4" />
+                  View Reports
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -156,37 +215,6 @@ export function DashboardContent() {
               <CardContent>
                 <AlertsOverview />
               </CardContent>
-            </Card>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="lg:col-span-3">
-              <CardHeader>
-                <CardTitle>Compliance Metrics</CardTitle>
-                <CardDescription>Key performance indicators for AML compliance</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ComplianceMetrics />
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full">
-                  <FileText className="mr-2 h-4 w-4" />
-                  View Detailed Report
-                </Button>
-              </CardFooter>
-            </Card>
-            <Card className="lg:col-span-4">
-              <CardHeader>
-                <CardTitle>Recent High-Risk Transactions</CardTitle>
-                <CardDescription>Transactions flagged by ML algorithms in the past 7 days</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TransactionTable limit={5} />
-              </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full">
-                  View All Transactions
-                </Button>
-              </CardFooter>
             </Card>
           </div>
         </TabsContent>
@@ -364,4 +392,3 @@ export function DashboardContent() {
     </div>
   )
 }
-
